@@ -10,6 +10,7 @@ endif()
 add_library(sobx INTERFACE)
 target_include_directories(sobx INTERFACE include)
 
+enable_testing()
 add_subdirectory(tests)
 
 install(DIRECTORY include DESTINATION ".")

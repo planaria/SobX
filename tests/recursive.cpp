@@ -7,7 +7,7 @@ TEST_CASE("recursive")
     sobx::observable<int> x = 1;
     std::vector<int> values;
 
-    sobx::autorun([&]() {
+    auto sub = sobx::autorun([&]() {
         if (x < 100)
         {
             values.push_back(x);

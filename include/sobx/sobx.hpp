@@ -236,6 +236,7 @@ private:
 };
 
 struct connection_from_observable_tag;
+struct connection_from_observer_tag;
 struct observable_from_trigger_get_tag;
 struct observable_from_trigger_set_tag;
 struct observer_from_trigger_tag;
@@ -244,14 +245,16 @@ class observable_base;
 class observer_base;
 
 class connection : public intrusive_list_item<connection_from_observable_tag>,
+                   public intrusive_list_item<connection_from_observer_tag>,
                    noncopyable
 {
 public:
-    connection(observable_base &able, const std::shared_ptr<observer_base> &er);
+    connection(observable_base &able, observer_base &er);
+
     ~connection();
 
     observable_base &able;
-    std::shared_ptr<observer_base> er;
+    observer_base &er;
 };
 
 class observable_base : public intrusive_list_item<observable_from_trigger_get_tag>,
@@ -275,7 +278,6 @@ public:
 };
 
 class observer_base : public intrusive_list_item<observer_from_trigger_tag>,
-                      public std::enable_shared_from_this<observer_base>,
                       noncopyable
 {
 public:
@@ -285,20 +287,28 @@ public:
 
     virtual ~observer_base()
     {
+        while (!connections.empty())
+        {
+            delete &connections.front();
+        }
     }
 
     virtual void on_notify() = 0;
+
+    intrusive_list<connection, connection_from_observer_tag> connections;
 };
 
-inline connection::connection(observable_base &able, const std::shared_ptr<observer_base> &er)
+inline connection::connection(observable_base &able, observer_base &er)
     : able(able), er(er)
 {
     able.connections.push_back(*this);
+    er.connections.push_back(*this);
 }
 
 inline connection::~connection()
 {
-    unlink();
+    static_cast<intrusive_list_item<connection_from_observable_tag> &>(*this).unlink();
+    static_cast<intrusive_list_item<connection_from_observer_tag> &>(*this).unlink();
 }
 
 class trigger
@@ -326,14 +336,12 @@ public:
 
             for (auto &c : able.connections)
             {
-                auto &er = *c.er;
-
-                if (er.is_linked())
+                if (c.er.is_linked())
                 {
-                    er.unlink();
+                    c.er.unlink();
                 }
 
-                fired.push_back(er);
+                fired.push_back(c.er);
             }
 
             ref.unlink();
@@ -365,7 +373,7 @@ public:
         }
     }
 
-    void observe(std::shared_ptr<observer_base> er)
+    void observe(observer_base &er)
     {
         for (auto &able : get_observables_)
         {
@@ -440,7 +448,7 @@ public:
             throw;
         }
 
-        t.observe(this->shared_from_this());
+        t.observe(*this);
         t.notify();
     }
 
@@ -555,6 +563,23 @@ private:
     value_type value_;
 };
 
+struct subscription
+{
+public:
+    subscription(std::unique_ptr<detail::observer_base> er)
+        : er_(std::move(er))
+    {
+    }
+
+    void unsubscribe()
+    {
+        er_.reset();
+    }
+
+private:
+    std::unique_ptr<detail::observer_base> er_;
+};
+
 template <class F>
 void run_in_action(F f)
 {
@@ -574,10 +599,12 @@ void run_in_action(F f)
 }
 
 template <class F>
-void autorun(F f)
+subscription autorun(F f)
 {
-    auto er = std::make_shared<detail::observer<F>>(f);
+    auto er = std::make_unique<detail::observer<F>>(f);
     er->on_notify();
+
+    return subscription(std::move(er));
 }
 
 } // namespace sobx
