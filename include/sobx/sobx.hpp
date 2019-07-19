@@ -71,10 +71,10 @@ public:
     typedef Tag tag_type;
     typedef intrusive_list_item<tag_type> item_type;
 
-    using base_type::difference_type;
-    using base_type::pointer;
-    using base_type::reference;
-    using base_type::value_type;
+    using typename base_type::difference_type;
+    using typename base_type::pointer;
+    using typename base_type::reference;
+    using typename base_type::value_type;
 
     intrusive_list_iterator()
     {
