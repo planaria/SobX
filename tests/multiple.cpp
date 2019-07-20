@@ -8,7 +8,7 @@ TEST_CASE("multiple")
     sobx::observable<int> y = 1;
     std::vector<int> values;
 
-    auto sub = sobx::autorun([&]() {
+    auto disposer = sobx::autorun([&]() {
         values.push_back(x * y);
     });
 

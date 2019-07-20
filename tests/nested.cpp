@@ -7,7 +7,7 @@ TEST_CASE("nested_run_in_action")
     sobx::observable<int> x = 1;
     std::vector<int> values;
 
-    auto sub = sobx::autorun([&]() {
+    auto disposer = sobx::autorun([&]() {
         values.push_back(x);
     });
 

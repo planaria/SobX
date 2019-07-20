@@ -7,7 +7,7 @@ TEST_CASE("same_value")
     sobx::observable<int> x;
     std::vector<int> values;
 
-    auto sub = sobx::autorun([&]() {
+    auto disposer = sobx::autorun([&]() {
         values.push_back(x);
     });
 

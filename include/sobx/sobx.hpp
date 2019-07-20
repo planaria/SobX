@@ -10,6 +10,23 @@
 namespace sobx
 {
 
+class reaction
+{
+public:
+    void dispose()
+    {
+        disposed_ = true;
+    }
+
+    bool is_disposed() const
+    {
+        return disposed_;
+    }
+
+private:
+    bool disposed_ = false;
+};
+
 namespace detail
 {
 
@@ -62,19 +79,17 @@ public:
 };
 
 template <class T, class Tag>
-class intrusive_list_iterator : public std::iterator<std::bidirectional_iterator_tag, T>
+class intrusive_list_iterator
 {
-private:
-    typedef std::iterator<std::bidirectional_iterator_tag, T> base_type;
-
 public:
+    typedef std::bidirectional_iterator_tag iterator_category;
+    typedef T value_type;
+    typedef std::ptrdiff_t difference_type;
+    typedef value_type *pointer;
+    typedef value_type &reference;
+
     typedef Tag tag_type;
     typedef intrusive_list_item<tag_type> item_type;
-
-    using typename base_type::difference_type;
-    using typename base_type::pointer;
-    using typename base_type::reference;
-    using typename base_type::value_type;
 
     intrusive_list_iterator()
     {
@@ -268,6 +283,11 @@ public:
 
     ~observable_base()
     {
+        disconnect();
+    }
+
+    void disconnect()
+    {
         while (!connections.empty())
         {
             delete &connections.front();
@@ -287,13 +307,18 @@ public:
 
     virtual ~observer_base()
     {
+        disconnect();
+    }
+
+    void disconnect()
+    {
         while (!connections.empty())
         {
             delete &connections.front();
         }
     }
 
-    virtual void on_notify() = 0;
+    virtual void on_notify(reaction &r) = 0;
 
     intrusive_list<connection, connection_from_observer_tag> connections;
 };
@@ -325,44 +350,72 @@ public:
         get() = prev_;
     }
 
-    void notify()
+    void notify(observer_base *new_er = nullptr)
     {
-        intrusive_list<observer_base, observer_from_trigger_tag> fired;
-
-        while (!set_observables_.empty())
-        {
-            auto &able = set_observables_.front();
-            auto &ref = static_cast<intrusive_list_item<observable_from_trigger_set_tag> &>(able);
-
-            for (auto &c : able.connections)
-            {
-                if (c.er.is_linked())
-                {
-                    c.er.unlink();
-                }
-
-                fired.push_back(c.er);
-            }
-
-            ref.unlink();
-        }
-
         std::exception_ptr e;
 
-        while (!fired.empty())
+        while (true)
         {
-            auto &er = fired.front();
-            er.unlink();
+            intrusive_list<observer_base, observer_from_trigger_tag> fired;
 
-            try
+            if (new_er)
             {
-                er.on_notify();
+                fired.push_back(*new_er);
+                new_er = nullptr;
             }
-            catch (...)
+
+            while (!set_observables_.empty())
             {
-                if (!e)
+                auto &able = set_observables_.front();
+                auto &ref = static_cast<intrusive_list_item<observable_from_trigger_set_tag> &>(able);
+
+                for (auto &c : able.connections)
                 {
-                    e = std::current_exception();
+                    if (c.er.is_linked())
+                    {
+                        c.er.unlink();
+                    }
+
+                    fired.push_back(c.er);
+                }
+
+                ref.unlink();
+            }
+
+            if (fired.empty())
+            {
+                break;
+            }
+
+            while (!fired.empty())
+            {
+                auto &er = fired.front();
+                er.unlink();
+
+                er.disconnect();
+
+                reaction r;
+
+                try
+                {
+                    er.on_notify(r);
+                }
+                catch (...)
+                {
+                    if (!e)
+                    {
+                        e = std::current_exception();
+                    }
+                }
+
+                if (!r.is_disposed())
+                {
+                    while (!get_observables_.empty())
+                    {
+                        auto &able = get_observables_.front();
+                        static_cast<intrusive_list_item<observable_from_trigger_get_tag> &>(able).unlink();
+                        new connection(able, er);
+                    }
                 }
             }
         }
@@ -370,14 +423,6 @@ public:
         if (e)
         {
             std::rethrow_exception(e);
-        }
-    }
-
-    void observe(observer_base &er)
-    {
-        for (auto &able : get_observables_)
-        {
-            new connection(able, er);
         }
     }
 
@@ -434,22 +479,10 @@ public:
     {
     }
 
-    virtual void on_notify() override
+    virtual void on_notify(reaction &r) override
     {
-        detail::trigger t;
-
-        try
-        {
-            f_();
-        }
-        catch (...)
-        {
-            t.notify();
-            throw;
-        }
-
-        t.observe(*this);
-        t.notify();
+        auto f = detail::bind_if_bindable(f_, r);
+        f();
     }
 
 private:
@@ -471,6 +504,18 @@ template <class T>
 bool equal(const T &lhs, const T &rhs, typename std::enable_if<!is_equality_comparable<T>::value>::type * = nullptr)
 {
     return false;
+}
+
+template <class F, class T>
+auto bind_if_bindable(F f, T &value, typename std::enable_if<std::is_invocable<F, T>::value>::type * = nullptr)
+{
+    return std::bind(f, std::ref(value));
+}
+
+template <class F, class T>
+auto bind_if_bindable(F f, T &value, typename std::enable_if<!std::is_invocable<F, T>::value>::type * = nullptr)
+{
+    return f;
 }
 
 } // namespace detail
@@ -563,17 +608,22 @@ private:
     value_type value_;
 };
 
-struct subscription
+struct disposer
 {
 public:
-    subscription(std::unique_ptr<detail::observer_base> er)
+    disposer(std::unique_ptr<detail::observer_base> er)
         : er_(std::move(er))
     {
     }
 
-    void unsubscribe()
+    void dispose()
     {
         er_.reset();
+    }
+
+    bool is_disposed() const
+    {
+        return !er_;
     }
 
 private:
@@ -599,12 +649,15 @@ void run_in_action(F f)
 }
 
 template <class F>
-subscription autorun(F f)
+disposer autorun(F f)
 {
     auto er = std::make_unique<detail::observer<F>>(f);
-    er->on_notify();
 
-    return subscription(std::move(er));
+    detail::trigger t;
+
+    t.notify(er.get());
+
+    return disposer(std::move(er));
 }
 
 } // namespace sobx
