@@ -611,6 +611,10 @@ private:
 struct disposer
 {
 public:
+    disposer()
+    {
+    }
+
     disposer(std::unique_ptr<detail::observer_base> er)
         : er_(std::move(er))
     {
