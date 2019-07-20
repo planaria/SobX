@@ -489,8 +489,13 @@ private:
     function_type f_;
 };
 
-template <class T, class U = T>
-struct is_equality_comparable : std::is_same<decltype(std::declval<T>() == std::declval<U>()), bool>
+template <class T, class U = T, class Enabler = void>
+struct is_equality_comparable : std::false_type
+{
+};
+
+template <class T, class U>
+struct is_equality_comparable<T, U, typename std::enable_if<true, decltype(std::declval<const T &>() == std::declval<const U &>(), (void)0)>::type> : std::true_type
 {
 };
 
