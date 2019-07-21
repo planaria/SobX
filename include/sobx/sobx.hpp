@@ -6,9 +6,32 @@
 #include <exception>
 #include <memory>
 #include <type_traits>
+#include <optional>
 
 namespace sobx
 {
+
+template <class T, class U = T, class Enabler = void>
+struct is_equality_comparable : std::false_type
+{
+};
+
+template <class T, class U>
+struct is_equality_comparable<T, U, typename std::enable_if<true, decltype(std::declval<const T &>() == std::declval<const U &>(), (void)0)>::type> : std::true_type
+{
+};
+
+template <class T, class Enabler = void>
+struct observable_traits
+{
+    static constexpr bool is_equality_comparable = is_equality_comparable<T>::value;
+};
+
+template <class T>
+struct observable_traits<std::optional<T>>
+{
+    static constexpr bool is_equality_comparable = observable_traits<T>::is_equality_comparable;
+};
 
 class reaction
 {
@@ -489,24 +512,14 @@ private:
     function_type f_;
 };
 
-template <class T, class U = T, class Enabler = void>
-struct is_equality_comparable : std::false_type
-{
-};
-
-template <class T, class U>
-struct is_equality_comparable<T, U, typename std::enable_if<true, decltype(std::declval<const T &>() == std::declval<const U &>(), (void)0)>::type> : std::true_type
-{
-};
-
 template <class T>
-bool equal(const T &lhs, const T &rhs, typename std::enable_if<is_equality_comparable<T>::value>::type * = nullptr)
+bool equal(const T &lhs, const T &rhs, typename std::enable_if<observable_traits<T>::is_equality_comparable>::type * = nullptr)
 {
     return lhs == rhs;
 }
 
 template <class T>
-bool equal(const T &lhs, const T &rhs, typename std::enable_if<!is_equality_comparable<T>::value>::type * = nullptr)
+bool equal(const T &lhs, const T &rhs, typename std::enable_if<!observable_traits<T>::is_equality_comparable>::type * = nullptr)
 {
     return false;
 }
