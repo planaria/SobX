@@ -7,6 +7,7 @@
 #include <memory>
 #include <type_traits>
 #include <optional>
+#include <functional>
 
 namespace sobx
 {
