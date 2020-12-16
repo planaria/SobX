@@ -491,27 +491,6 @@ private:
     intrusive_list<observable_base, observable_from_trigger_set_tag> set_observables_;
 };
 
-template <class F>
-class observer : public detail::observer_base
-{
-public:
-    typedef F function_type;
-
-    explicit observer(function_type f)
-        : f_(f)
-    {
-    }
-
-    virtual void on_notify(reaction &r) override
-    {
-        auto f = detail::bind_if_bindable(f_, r);
-        f();
-    }
-
-private:
-    function_type f_;
-};
-
 template <class T>
 bool equal(const T &lhs, const T &rhs, typename std::enable_if<observable_traits<T>::is_equality_comparable>::type * = nullptr)
 {
@@ -535,6 +514,27 @@ auto bind_if_bindable(F f, T &value, typename std::enable_if<!std::is_invocable<
 {
     return f;
 }
+
+template <class F>
+class observer : public detail::observer_base
+{
+public:
+    typedef F function_type;
+
+    explicit observer(function_type f)
+        : f_(f)
+    {
+    }
+
+    virtual void on_notify(reaction &r) override
+    {
+        auto f = detail::bind_if_bindable(f_, r);
+        f();
+    }
+
+private:
+    function_type f_;
+};
 
 } // namespace detail
 
