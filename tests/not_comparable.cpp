@@ -1,5 +1,5 @@
 #include <sobx/sobx.hpp>
-#include <catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <vector>
 #include <optional>
 
