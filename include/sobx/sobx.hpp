@@ -505,13 +505,13 @@ bool equal(const T &lhs, const T &rhs, typename std::enable_if<!observable_trait
 }
 
 template <class F, class T>
-auto bind_if_bindable(F f, T &value, typename std::enable_if<std::is_invocable<F, T>::value>::type * = nullptr)
+auto bind_if_bindable(F f, T value, typename std::enable_if<std::is_invocable<F, T>::value>::type * = nullptr)
 {
-    return std::bind(f, std::ref(value));
+    return std::bind(f, value);
 }
 
 template <class F, class T>
-auto bind_if_bindable(F f, T &value, typename std::enable_if<!std::is_invocable<F, T>::value>::type * = nullptr)
+auto bind_if_bindable(F f, T value, typename std::enable_if<!std::is_invocable<F, T>::value>::type * = nullptr)
 {
     return f;
 }
@@ -529,7 +529,7 @@ public:
 
     virtual void on_notify(reaction &r) override
     {
-        auto f = detail::bind_if_bindable(f_, r);
+        auto f = detail::bind_if_bindable<function_type, reaction&>(f_, r);
         f();
     }
 
