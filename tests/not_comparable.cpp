@@ -20,7 +20,7 @@ struct test
 
 TEST_CASE("not_comparable")
 {
-    sobx::observable<test> x = 1;
+    sobx::observable<test> x = { 1 };
     std::vector<int> values;
 
     auto disposer = sobx::autorun([&]() {
@@ -44,7 +44,7 @@ TEST_CASE("not_comparable")
 
 TEST_CASE("not_comparable_optional")
 {
-    sobx::observable<std::optional<test>> x = 1;
+    sobx::observable<std::optional<test>> x = { 1 };
     std::vector<int> values;
 
     auto disposer = sobx::autorun([&]() {
